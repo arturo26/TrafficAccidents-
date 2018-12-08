@@ -1,0 +1,339 @@
+---
+title: "Accidentes"
+author: "Arturo Torre"
+date: "6/12/2018"
+output: html_document
+---
+
+## Accidents in Mexico {.tabset .tabset-fade .tabset-pills}
+
+###Intro
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggplot2)
+library(magrittr)
+library(tidyr)
+library(knitr)
+library(reshape)
+library(viridis)
+library(gridExtra)
+library(scales)
+library(mxmaps)
+library(stringr)
+library(DescTools)
+
+```
+
+In this work we will analyze the accidents in Mexido during 2017.
+
+```{r, include=FALSE}
+#We load the data base, we use the file encoding feature because the data set contains special characters in spanish
+
+#To avoid the deletion of the leading zero for state and municipality code we can treat those columns as text.
+total <- read.csv(file="/Users/arturotorre/Desktop/Git/TrafficAccidents-/Data/2017.csv", header=TRUE, sep=",", stringsAsFactors = FALSE, fileEncoding="latin1", colClasses=c("ID_ENTIDAD"="character", "ID_MUNICIPIO"="character"))
+```
+
+
+First we will analyze which day has the greatest amount of traffic accidents by state
+```{r,include=FALSE}
+
+dia <- total %>% select(ID_ENTIDAD,DIASEMANA)  %>% group_by(ID_ENTIDAD, DIASEMANA) %>% count
+
+#Ordenamos el subconjunto en base al órden de los días
+
+dia$DIASEMANA <- factor(dia$DIASEMANA, levels= c("Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"))
+
+dia[order(dia$DIASEMANA), ]  
+
+```
+
+```{r, include=FALSE}
+diag <- ggplot(data=dia, aes(x=DIASEMANA,y=n, fill= DIASEMANA)) +
+  geom_bar(stat="identity")+
+  ylab('Número') +
+  xlab('Día de la semana') +
+  ggtitle("Accidentes por día por Estado") +
+  facet_grid ( .~ID_ENTIDAD ) +
+  theme(axis.text.x = element_text(angle = 60, hjust=1, size=20)) +
+  theme(plot.title = element_text(size = 60, face = "bold", hjust = 0.5)) +
+  theme(axis.text.y = element_text(size=30)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(axis.title.y = element_text(size=40)) +
+  theme(axis.title.x = element_text(size=40))
+```
+
+```{r, fig.width=50, fig.height=25}
+diag
+```
+As we can see, independently from the state, the biggest share of accidents take place during Friday and Saturday.
+
+```{r,include=FALSE}
+
+mes <- total %>% select(ID_ENTIDAD,MES)  %>% group_by(MES) %>% count
+
+```
+
+```{r, include=FALSE}
+mesg <- ggplot(data=mes, aes(x=MES,y=n)) +
+  geom_bar(stat="identity")+
+  ylab('Número') +
+  xlab('MES') +
+  ggtitle("Accidentes por mes") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+```{r}
+mesg
+```
+
+Despite having differences between months, the distribution is almost uniform. December leads the count, but of a marginal difference.
+
+```{r, include=FALSE}
+hora <- total %>% select(ID_ENTIDAD,ID_HORA)  %>% group_by(ID_HORA) %>% count
+```
+
+```{r, include=FALSE}
+horag <- ggplot(data=hora, aes(x=ID_HORA,y=n)) +
+  geom_bar(stat="identity")+
+  ylab('Número') +
+  xlab('Hora') +
+  ggtitle("Accidentes por Hora") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+```{r}
+horag
+```
+
+As we can see from last graph, the biggest accident rates are coincident with working hours.
+
+
+```{r,include=FALSE}
+edo <- total %>% select(ID_ENTIDAD)  %>% group_by(ID_ENTIDAD) %>% count
+edo$region <- as.numeric(edo$ID_ENTIDAD)
+edo$value <- edo$n
+
+```
+
+```{r}
+
+mxstate_choropleth(edo, title = "Traffic Accidents, by state", num_colors = 9)
+```
+
+Nuevo León, Jalisco and Chihuahua account for the highest rate of traffic accidents
+
+
+
+```{r, include=FALSE}
+#Tenemos el problema de que la base de datos original contiene \t en los códigos de entidad y municipio y hay que quitarlo. Si no se quita no se puede hacer el unite correctamente. Se resuelve con la librería DescTools y la función StrTrim
+
+mun <- total %>% select(ID_ENTIDAD, ID_MUNICIPIO)  %>% group_by(ID_ENTIDAD, ID_MUNICIPIO) %>% count
+
+mun$ID_ENTIDAD<- StrTrim(mun$ID_ENTIDAD, pattern = "\t", method = "both")
+
+mun$ID_MUNICIPIO<- StrTrim(mun$ID_MUNICIPIO, pattern = "\t", method = "both")
+
+mun$value <- mun$n
+
+mun <- mun %>% unite("region", ID_ENTIDAD, ID_MUNICIPIO, sep="")
+
+
+```
+
+```{r, include=FALSE}
+mung <- mxmunicipio_choropleth(mun, num_colors = 9, title = "Traffic Accidents, by municipality", show_states = FALSE)
+```
+
+```{r}
+mung
+```
+
+
+###Nuevo León
+
+```{r, include=FALSE}
+mty <- mun %>% select(region, value) 
+
+mtyg <- mxmunicipio_choropleth(mty, num_colors = 1, zoom= c(19001:19051), title = "Nuevo León", legend= "número")
+```
+
+```{r}
+mtyg
+```
+
+As we can see most of the traffic accidents occur on Monterrey´s Metro Area.
+
+```{r, include=FALSE}
+mty1 <- total %>% filter(ID_ENTIDAD =="\t19")
+
+edad <- mty1 %>% select(ID_EDAD) %>% group_by(ID_EDAD) %>% count
+```
+
+```{r,include=FALSE}
+edadmty <- ggplot(data=edad, aes(x=ID_EDAD,y=n)) +
+  geom_bar(stat="identity")+
+  ylab('Número') +
+  xlab('Edad') +
+  ggtitle("Accidentes por Edad") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+```{r}
+edadmty
+```
+
+As we case from the graph. Young people around 25 years old are proner to have accidents. Accidents were age was asigned to 0 are cases were the driver flee. Accidents were age was asigned to 0 are cases were the driver´s age was not identified.
+
+```{r, include=FALSE}
+
+genero <- mty1 %>% select(SEXO) %>% group_by(SEXO) %>% count
+
+```
+
+```{r,include=FALSE}
+generomty <- ggplot(data=genero, aes(x=SEXO,y=n)) +
+  geom_bar(stat="identity")+
+  ylab('Número') +
+  xlab('Sexo') +
+  ggtitle("Accidentes por sexo") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+```{r}
+generomty
+```
+
+In most of the cases the driver´s geneder was male. Notice that age 0 classified accidents match with the "se fugo" category.
+
+
+###Chihuahua
+
+```{r, include=FALSE}
+ch <- mun %>% select(region, value) 
+
+chg <- mxmunicipio_choropleth(ch, num_colors = 1, zoom= c(08001:08066), title = "Chihuahua", legend= "número")
+```
+
+```{r}
+chg
+```
+
+As we can see most of the traffic accidents occur on Chihuahua´s Metro Area. Also we can notice that Ciudad Juarez´s Metro.
+
+```{r, include=FALSE}
+ch1 <- total %>% filter(ID_ENTIDAD =="\t08")
+
+edad <- ch1 %>% select(ID_EDAD) %>% group_by(ID_EDAD) %>% count
+```
+
+```{r,include=FALSE}
+edadch <- ggplot(data=edad, aes(x=ID_EDAD,y=n)) +
+  geom_bar(stat="identity")+
+  ylab('Número') +
+  xlab('Edad') +
+  ggtitle("Accidentes por Edad") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+```{r}
+edadch
+```
+
+As we case from the graph. Young people around 25 years old are proner to have accidents. Accidents were age was asigned to 0 are cases were the driver flee. Accidents were age was asigned to 0 are cases were the driver´s age was not identified.
+
+
+```{r, include=FALSE}
+
+genero <- ch1 %>% select(SEXO) %>% group_by(SEXO) %>% count
+
+```
+
+```{r,include=FALSE}
+generoch <- ggplot(data=genero, aes(x=SEXO,y=n)) +
+  geom_bar(stat="identity")+
+  ylab('Número') +
+  xlab('Sexo') +
+  ggtitle("Accidentes por sexo") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+```{r}
+generoch
+```
+
+In most of the cases the driver´s geneder was male. Notice that age 0 classified accidents match with the "se fugo" category.
+
+###Jalisco
+
+```{r, include=FALSE}
+gg <- mun %>% select(region, value) 
+
+ggg <- mxmunicipio_choropleth(gg, num_colors = 1, zoom= c(14001:14125), title = "Jalisco", legend= "número")
+```
+
+```{r}
+ggg
+```
+
+As we can see most of the traffic accidents occur on Guadalajaras´s Metro Area.
+
+
+```{r, include=FALSE}
+gg1 <- total %>% filter(ID_ENTIDAD =="\t14")
+
+edad <- gg1 %>% select(ID_EDAD) %>% group_by(ID_EDAD) %>% count
+```
+
+```{r,include=FALSE}
+edadgg <- ggplot(data=edad, aes(x=ID_EDAD,y=n)) +
+  geom_bar(stat="identity")+
+  ylab('Número') +
+  xlab('Edad') +
+  ggtitle("Accidentes por Edad") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+```{r}
+edadgg
+```
+
+As we case from the graph. Young people around 18 years old are proner to have accidents in Jalisco. Accidents were age was asigned to 0 are cases were the driver flee. Accidents were age was asigned to 0 are cases were the driver´s age was not identified.
+
+```{r, include=FALSE}
+
+genero <- gg1 %>% select(SEXO) %>% group_by(SEXO) %>% count
+
+```
+
+```{r,include=FALSE}
+generogg <- ggplot(data=genero, aes(x=SEXO,y=n)) +
+  geom_bar(stat="identity")+
+  ylab('Número') +
+  xlab('Sexo') +
+  ggtitle("Accidentes por sexo") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+```{r}
+generogg
+```
+
+In most of the cases the driver´s geneder was male. Notice that age 0 classified accidents match with the "se fugo" category.
+
+
+###Findings
+
+1.- In almost every state the biggest share of accidents take place during Friday and Saturday.
+
+2.- The number of accidents per month is almost the same.
+
+3.- Most of the accidents take place during working hours (between 8 am and 7 pm).
+
+4.- Most of the accidents took place in Nuevo León, Chihuahua and Jalisco.
+
+5.- Young people are proner to have and accident.
+
+6.- In most of the cases the driver´s geneder was male.
